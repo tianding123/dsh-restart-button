@@ -35,7 +35,7 @@ const DEFAULTS = {
   /** 启动后是否自动在最近活跃会话发「继续任务」 */
   autoContinue: true,
   /** 自动继续延后多少毫秒（给 DSH 一点时间把服务准备好） */
-  autoContinueDelayMs: 5000,
+  autoContinueDelayMs: 10000,
   /** 自动继续发的内容 */
   autoContinuePrompt: '继续任务',
 }
@@ -105,7 +105,8 @@ async function autoContinue(ctx, config, diagFn) {
       return
     }
 
-    const at = toRfc3339(new Date(Date.now() + 5000))
+    // schedule 再延 1 秒触发（原来 5 秒，用户 2026-10-22 要求缩短）
+    const at = toRfc3339(new Date(Date.now() + 1000))
     await schedule.create(target.id, {
       title: '自动继续（DSH 启动触发）',
       prompt: config.autoContinuePrompt,
@@ -209,7 +210,7 @@ export function apply(ctx, rawConfig) {
       const timer = setTimeout(() => {
         if (cancelled) return
         void autoContinue(ctx, config, diag)
-      }, Math.max(500, Number(config.autoContinueDelayMs) || 5000))
+      }, Math.max(500, Number(config.autoContinueDelayMs) || 10000))
 
       return () => {
         cancelled = true
