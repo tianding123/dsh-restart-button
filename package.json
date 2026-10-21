@@ -1,0 +1,60 @@
+{
+  "name": "dsh-restart-button",
+  "version": "0.2.0",
+  "description": "标题栏右侧「重启 DSH」按钮 + 启动后自动在最近活跃会话发一句「继续任务」（省得调试插件时反复打字）。",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible"
+      }
+    }
+  },
+  "meta": {
+    "title": "重启按钮",
+    "description": "点一下重启 DSH；重启完自动在最近活跃的会话里发「继续任务」。"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "author": "tianding123",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "restart",
+    "automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tianding123/dsh-restart-button.git"
+  },
+  "homepage": "https://github.com/tianding123/dsh-restart-button#readme",
+  "bugs": {
+    "url": "https://github.com/tianding123/dsh-restart-button/issues"
+  }
+}
