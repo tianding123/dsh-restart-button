@@ -1,0 +1,13 @@
+# bundle 自带补丁：只放"哪台机器都一样"的部分。
+#
+# ⚠ 格式是 **`- insert:`**（往 Loader 条目表里插入），不是裸的 `- id:`
+#   —— 写成裸 id 的后果是"装得上、cordis.yml 里却没有、永不加载"
+#   （2026-10-16 在 dsh-session-handoff 上踩过，见工作区 procedures 卡）。
+#
+# 本机专属的值（脚本路径 / 延迟秒数）不写在这里 ——
+# 每台机器在自己的 profile 补丁层（~/.dsh/profiles/<profile>/cordis.patch.yml）
+# 按 id 覆盖同名条目。
+
+- insert:
+    - id: restart-button
+      name: dsh-restart-button
