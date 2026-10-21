@@ -1,6 +1,6 @@
 {
   "name": "dsh-restart-button",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "标题栏右侧「重启 DSH」按钮 + 启动后自动在最近活跃会话发一句「继续任务」（省得调试插件时反复打字）。",
   "license": "MIT",
   "type": "module",
