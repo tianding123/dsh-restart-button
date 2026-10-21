@@ -23,8 +23,9 @@ import { dirname, join } from 'node:path'
 
 export const name = 'dsh-restart-button'
 
-// 只需要 connection（注册 /api 路由用）。别的不碰。
-export const inject = ['connection']
+// connection：注册 /api 路由用
+// tools / skills：注册 restart_dsh 工具和 skill 用（不列进 inject 的话 ctx.get 拿到的是 undefined）
+export const inject = ['connection', 'tools', 'skills']
 
 const DEFAULTS = {
   /** dsh-rescue 那个延迟重启脚本的绝对路径 */
@@ -215,6 +216,137 @@ export function apply(ctx, rawConfig) {
         try { clearTimeout(timer) } catch { /* ignore */ }
       }
     }, 'dsh-restart-button: 启动后自动继续')
+  }
+
+  // ── AI 可用的 restart_dsh 工具（2026-10-22 加）──────────────────────
+  // 目的：别的电脑装了本插件后，Agent 在需要重启时能【自己重启】，
+  //       不用发消息让用户去点按钮。
+  //
+  // ⚠️ 延迟默认 1 秒（跟按钮一致，用户 2026-10-22 明确要求）。
+  //     前提是「先把话说完再调工具」—— 这是正常的调用顺序。
+  //
+  // ⚠️ 注册时必须给 output: { schema, render } —— 只给 schema 会被拒：
+  //      tool "xxx" must declare output { schema, render, presentationMeta? }
+  try {
+    const tools = ctx.tools || ctx.get('tools')
+    diag(`tools 服务：${tools ? (typeof tools.register) : 'undefined'}`)
+    if (tools && typeof tools.register === 'function') {
+      tools.register({
+        name: 'restart_dsh',
+        description:
+          '重启 DSH 本体（点一下右上角那个重启键的等价操作，但由你自己发起）。'
+          + '**装这个功能就是为了让你在需要重启时自己重启** —— 不要再发消息让用户手动点按钮。'
+          + '\n\n什么时候该用：'
+          + '\n· 装/卸/升级了插件，需要 DSH 重新加载才生效'
+          + '\n· 改了会被缓存的代码（宿主插件 index.js / client 插件 client.js）'
+          + '\n· 用户明确说「重启一下」'
+          + '\n\n什么时候别用：'
+          + '\n· 只是想刷新页面 —— 那用浏览器刷新就够了'
+          + '\n· 当前这一轮还有没写完的结论要告诉用户（先把话说完再调）'
+          + '\n\n调用后：DSH 会在 delaySeconds 秒后断连并自动起来；'
+          + '如果你开了 feiyu 的自动继续，起来后会自动收到「继续任务」。',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            delaySeconds: {
+              type: 'integer',
+              description:
+                '延迟几秒后重启（默认 1，跟右上角那个重启键一致）。'
+                + '正常用法：先把要跟用户说的话说完，再调这个工具 —— 1 秒足够。',
+            },
+          },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              ok: { type: 'boolean' },
+              delay: { type: 'integer', description: '实际采用的延迟秒数' },
+              detail: { type: 'string', description: '结果摘要' },
+            },
+          },
+          // ⚠️ 必须给 render —— 只给 schema 会被拒：
+          //    tool "xxx" must declare output { schema, render, presentationMeta? }
+          render: (_args, value) => [
+            { type: 'text', text: String(value?.detail || '已投递重启') },
+          ],
+        },
+        async execute(args) {
+          try {
+            const want = Number(args?.delaySeconds)
+            const delay = Number.isFinite(want) ? Math.max(1, Math.floor(want)) : 1
+            const result = await dispatchRestart(config.script, delay)
+            diag(`AI 调用了 restart_dsh：延迟 ${result.delay}s`)
+            return {
+              ok: true,
+              delay: result.delay,
+              detail: `已投递重启：DSH 会在 ${result.delay} 秒后断连并自动起来。`
+                + '（现在把要告诉用户的话说完就行）',
+            }
+          } catch (error) {
+            diag(`restart_dsh 失败：${error?.message ?? error}`)
+            return {
+              ok: false,
+              delay: 0,
+              detail: `重启失败：${error?.message ?? String(error)}`,
+            }
+          }
+        },
+      })
+    }
+  } catch (e) {
+    diag(`注册 restart_dsh 失败：${e?.message ?? e}`)
+  }
+
+  // ── 注册 skill：告诉 AI 有这个工具、什么时候用 ─────────────────────
+  try {
+    const skills = ctx.skills || ctx.get('skills')
+    if (skills && typeof skills.register === 'function') {
+      const content = [
+        '# 重启 DSH',
+        '',
+        '本环境装了 `dsh-restart-button` 插件，提供一个工具 **`restart_dsh`**。',
+        '',
+        '## 核心约定',
+        '',
+        '**遇到需要重启 DSH 的情况，直接调用 `restart_dsh` —— 不要发消息让用户自己去点右上角按钮。**',
+        '',
+        '## 什么时候该重启',
+        '',
+        '- 装 / 卸 / 升级了插件，需要重新加载才生效',
+        '- 改了会被缓存的代码（宿主插件 `index.js`、client 插件 `client.js`）',
+        '- 用户明确说「重启一下」',
+        '',
+        '## 什么时候别重启',
+        '',
+        '- 只是想刷新页面 —— 浏览器刷新就够',
+        '- 这一轮还有结论没说完 —— 先把话说完，再调工具',
+        '',
+        '## 参数',
+        '',
+        '`delaySeconds`（默认 1，跟右上角那个重启键一致）—— 延迟几秒后重启。',
+        '正常用法：先把要跟用户说的话说完，再调这个工具 —— 1 秒足够。',
+        '',
+        '## 调用之后',
+        '',
+        'DSH 会在你指定的秒数后断连并自动起来。',
+        '如果本插件开着「自动继续」，起来后会自动在最近活跃的会话里收到「继续任务」，',
+        '你接着干就行。',
+      ].join('\n')
+
+      skills.register({
+        name: 'restart-dsh',
+        description:
+          '需要重启 DSH 时（装/卸插件、改被缓存的代码、用户要求）用 restart_dsh 工具自己重启，'
+          + '别发消息让用户手动点按钮。',
+        content,
+        source: 'plugin:dsh-restart-button',
+      })
+    }
+  } catch (e) {
+    diag(`注册 restart-dsh skill 失败：${e?.message ?? e}`)
   }
 
   return { config }
